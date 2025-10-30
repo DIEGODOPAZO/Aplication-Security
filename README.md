@@ -46,7 +46,7 @@
 query.setParameter("email", email); query.setParameter("password", password);
 `````
 		
-De este modo, el input del usuario se envía de forma segura al motor JPA, imposibilitando que la consulta sea manipulada.
+   De este modo, el input del usuario se envía de forma segura al motor JPA, imposibilitando que la consulta sea manipulada.
 
 - File upload en la foto de perfil
 		Se ha detectado que la funcionalidad de “subir imagen de perfil” aceptaba ficheros que no eran imágenes legítimas, permitiendo la subida de ficheros maliciosos (por ejemplo polyglots o archivos con payloads ocultos) que podrían llevar a la ejecución de scripts u otra actividad no deseada.
@@ -68,7 +68,7 @@ De este modo, el input del usuario se envía de forma segura al motor JPA, impos
 ```java
 	  User user = userRepository.findByEmailAndPassword(email, BCrypt.hashpw(clearPassword, SALT));
 ```
-    Esto provoca un fallo serio ya que se puede sitinguir donde acaba el hash de la contraseña y donde empieza el salt, permitiendo descubrir la contraseña a base d efuerza bruta probando operaciones hash en diferentes contraseñas hasta que coincida.
+   Esto provoca un fallo serio ya que se puede sitinguir donde acaba el hash de la contraseña y donde empieza el salt, permitiendo descubrir la contraseña a base d efuerza bruta probando operaciones hash en diferentes contraseñas hasta que coincida.
 	Se ha solucionado generando un salt de manera aleatoria usando esta función:
 ````java
 String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
