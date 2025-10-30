@@ -1,4 +1,4 @@
-###### por Sergio Luaces Martín, Diego Dopazo García y Aarón García Filgueira
+###### por Sergio Luaces Martín, Diego Dopazo García y Aarón yada yada
 
 # Vulnerabilidades encontradas:
 
@@ -33,9 +33,19 @@
 		Aparte de en el caso del login, también ocurre en otros casos donde se le permite al usuario escribir texto.
 		Se ha solucionado...
 - SQLi en el login
+		Se ha detectado que el formulario de autenticación concatenaba directamente los valores introducidos por el usuario en la consulta JPQL/SQL, permitiendo modificar la query ejecutada en el servidor mediante técnicas de SQL Injection (por ejemplo, usando `admin' OR '1'='1`).  
+		Esto podría permitir acceder a cuentas sin conocer las credenciales correctas o revelar información sensible de la base de datos.
+		Se ha solucionado eliminando la construcción dinámica del JPQL y sustituyéndola por consultas parametrizadas, evitando que el valor introducido por el usuario pueda alterar la query.  
+		En concreto, se ha reemplazado el uso de `MessageFormat.format(...)` por queries con parámetros `:email` y `:password`, utilizando `TypedQuery` y `setParameter()`:
+
+```java
+	TypedQuery<User> query = entityManager.createQuery("SELECT u FROM User u WHERE u.email = :email AND u.password = :password", User.class); query.setParameter("email", email); query.setParameter("password", password);
+```
+	De este modo, el input del usuario se envía de forma segura al motor JPA, imposibilitando que la consulta sea manipulada.
+
 - File upload en la foto de perfil
-		Se ha detectado que se pueden subir ficheros maliciosos que no son necesariamente imágenes en la opción de "subir una imagen de perfil", provocando que puedan ejecutarse scripts, entre otros.
-		Se ha solucionado usando PngReader de la librería pngj haciendo que se compruebe que lo que se pase como fichero adjunto en la foto de perfil es realmente un fochero PNG. Esto se consigue analizando el cuerpo entero del fichero.
+		Se ha detectado que la funcionalidad de “subir imagen de perfil” aceptaba ficheros que no eran imágenes legítimas, permitiendo la subida de ficheros maliciosos (por ejemplo polyglots o archivos con payloads ocultos) que podrían llevar a la ejecución de scripts u otra actividad no deseada.
+		Se ha solucionado verificando de forma exhaustiva el contenido del fichero subido usando `PngReader` de la librería **pngj**: antes de aceptar el archivo se analiza el cuerpo completo del fichero y se comprueba que cumple la estructura y los chunks válidos de un PNG. Solo se admiten ficheros que pasan esta validación; el resto se rechaza. Con ello se evita que ficheros no-PNG o PNG malformados lleguen al almacenamiento o al procesamiento posterior.
 - Bussines logging en el precio a la hora de pagar
 - Information disclosure (Los errores que se muestran en la página)
 - Insecure Deserialization (cookie: user-info)
