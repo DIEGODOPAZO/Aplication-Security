@@ -39,9 +39,14 @@
 		En concreto, se ha reemplazado el uso de `MessageFormat.format(...)` por queries con parámetros `:email` y `:password`, utilizando `TypedQuery` y `setParameter()`:
 
 ```java
-	TypedQuery<User> query = entityManager.createQuery("SELECT u FROM User u WHERE u.email = :email AND u.password = :password", User.class); query.setParameter("email", email); query.setParameter("password", password);
+	TypedQuery<User> query = entityManager.createQuery("SELECT u FROM User u WHERE u.email = :email AND u.password = :password", User.class);
 ```
-	De este modo, el input del usuario se envía de forma segura al motor JPA, imposibilitando que la consulta sea manipulada.
+
+````java
+query.setParameter("email", email); query.setParameter("password", password);
+`````
+		
+De este modo, el input del usuario se envía de forma segura al motor JPA, imposibilitando que la consulta sea manipulada.
 
 - File upload en la foto de perfil
 		Se ha detectado que la funcionalidad de “subir imagen de perfil” aceptaba ficheros que no eran imágenes legítimas, permitiendo la subida de ficheros maliciosos (por ejemplo polyglots o archivos con payloads ocultos) que podrían llevar a la ejecución de scripts u otra actividad no deseada.
