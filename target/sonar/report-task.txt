@@ -1,0 +1,6 @@
+projectKey=es.storeapp:store-app
+serverUrl=http://localhost:9000
+serverVersion=25.9.0.112764
+dashboardUrl=http://localhost:9000/dashboard?id=es.storeapp%3Astore-app
+ceTaskId=0825d94a-89c2-4198-9325-eb40705fe6bf
+ceTaskUrl=http://localhost:9000/api/ce/task?id=0825d94a-89c2-4198-9325-eb40705fe6bf
