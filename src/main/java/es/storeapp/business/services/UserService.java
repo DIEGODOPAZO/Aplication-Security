@@ -9,14 +9,12 @@ import es.storeapp.business.repositories.UserRepository;
 import es.storeapp.business.utils.ExceptionGenerationUtils;
 import es.storeapp.common.ConfigurationParameters;
 import es.storeapp.common.Constants;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+
+import java.io.*;
 import java.nio.file.Files;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import jakarta.annotation.PostConstruct;
 import org.apache.commons.compress.utils.IOUtils;
@@ -28,6 +26,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ar.com.hjg.pngj.ImageInfo;
+import ar.com.hjg.pngj.PngReader;
 
 @Service
 public class UserService {
@@ -221,16 +221,52 @@ public class UserService {
         }
     }
 
+    private static boolean isValidPng(InputStream inputStream) {
+        PngReader png = null;
+        try {
+            png = new PngReader(inputStream); // usar InputStream en lugar de File
+            ImageInfo info = png.imgInfo;
+            System.out.println("Ancho: " + info.cols + ", Alto: " + info.rows + ", Bit depth: " + info.bitDepth);
+            return true;
+        } catch (RuntimeException e) {
+            System.out.println("No es un PNG válido: " + e.getMessage());
+            return false;
+        } finally {
+            if (png != null) png.end();
+        }
+    }
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("png");
+    private static String getFileExtension(String fileName) {
+        int lastDot = fileName.lastIndexOf('.');
+        if (lastDot == -1) return "";
+        return fileName.substring(lastDot + 1);
+    }
     private void saveProfileImage(Long id, String image, byte[] imageContents) {
-        if (image != null && image.trim().length() > 0 && imageContents != null) {
-            File userDir = new File(resourcesDir, id.toString());
-            userDir.mkdirs();
-            File profilePicture = new File(userDir, image);
-            try (FileOutputStream outputStream = new FileOutputStream(profilePicture);) {
-                IOUtils.copy(new ByteArrayInputStream(imageContents), outputStream);
-            } catch (Exception e) {
-                logger.error(e.getMessage(), e);
+        if (image == null || image.trim().isEmpty() || imageContents == null) return;
+
+        // Verificar extensión
+        String extension = getFileExtension(image);
+        if (!ALLOWED_EXTENSIONS.contains(extension.toLowerCase())) {
+            throw new IllegalArgumentException("Solo se permiten archivos PNG.");
+        }
+
+        // Validar PNG en memoria usando ByteArrayInputStream
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(imageContents)) {
+            if (!isValidPng(bais)) {
+                throw new IllegalArgumentException("El archivo subido no es un PNG válido.");
             }
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Error validando el PNG.", e);
+        }
+
+        // Guardar archivo seguro
+        File userDir = new File(resourcesDir, id.toString());
+        userDir.mkdirs();
+        File profilePicture = new File(userDir, image);
+        try (FileOutputStream outputStream = new FileOutputStream(profilePicture)) {
+            IOUtils.copy(new ByteArrayInputStream(imageContents), outputStream);
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
         }
     }
 
