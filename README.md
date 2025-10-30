@@ -1,4 +1,4 @@
-###### por Sergio Luaces Martín, Diego Dopazo García y Aarón yada yada
+###### por Sergio Luaces Martín, Diego Dopazo García y Aarón García Filgueira
 
 # Vulnerabilidades encontradas:
 
