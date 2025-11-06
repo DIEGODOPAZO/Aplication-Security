@@ -1,10 +1,7 @@
 package es.storeapp.web.forms;
 
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.*;
 import org.springframework.web.multipart.MultipartFile;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,6 +17,10 @@ public class UserProfileForm {
     private String email;
 
     @Size(min = 8, max = 255, message = "La contraseña debe tener al menos 8 caracteres")
+    @Pattern(
+            regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-]).+$",
+            message = "La contraseña debe incluir mayúsculas, minúsculas, números y un carácter especial"
+    )
     private String password;
 
     @NotBlank(message = "La dirección es obligatoria")
