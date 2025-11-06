@@ -67,7 +67,7 @@ public class UserService {
             throw exceptionGenerationUtils.toAuthenticationException(Constants.AUTH_INVALID_USER_MESSAGE, email);
         }
 
-        // ✅ Usar BCrypt.checkpw() para comparar contraseñas
+        // Usar BCrypt.checkpw() para comparar contraseñas
         if (!BCrypt.checkpw(clearPassword, user.getPassword())) {
             throw exceptionGenerationUtils.toAuthenticationException(Constants.AUTH_INVALID_PASSWORD_MESSAGE, email);
         }
