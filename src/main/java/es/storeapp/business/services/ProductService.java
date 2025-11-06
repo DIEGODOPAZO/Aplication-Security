@@ -5,8 +5,10 @@ import es.storeapp.business.entities.Comment;
 import es.storeapp.business.entities.Product;
 import es.storeapp.business.entities.User;
 import es.storeapp.business.exceptions.InstanceNotFoundException;
+import es.storeapp.business.exceptions.InvalidStateException;
 import es.storeapp.business.repositories.CategoryRepository;
 import es.storeapp.business.repositories.CommentRepository;
+import es.storeapp.business.repositories.OrderLineRepository;
 import es.storeapp.business.repositories.ProductRepository;
 import es.storeapp.business.utils.ExceptionGenerationUtils;
 import es.storeapp.common.ConfigurationParameters;
@@ -36,6 +38,9 @@ public class ProductService {
 
     @Autowired
     private CommentRepository rateRepository;
+
+    @Autowired
+    private OrderLineRepository orderLineRepository;
 
     @Autowired
     ExceptionGenerationUtils exceptionGenerationUtils;
@@ -86,13 +91,22 @@ public class ProductService {
 
     @Transactional()
     public Comment comment(User user, Long productId, String text, Integer rating)
-            throws InstanceNotFoundException {
+            throws InstanceNotFoundException, InvalidStateException {
+
         Product product = productRepository.findById(productId);
+
+        boolean purchased = orderLineRepository.findIfUserBuyProduct(user.getUserId(), productId);
+        if (!purchased) {
+            throw exceptionGenerationUtils.toInvalidStateException(
+                    "User is not allowed to comment a product not purchased"
+            );
+        }
+
         try {
             Comment comment = rateRepository.findByUserAndProduct(user.getUserId(), product.getProductId());
-            if(logger.isDebugEnabled()) {
-                logger.debug(MessageFormat.format("{0} has modified his comment of the product {1}", 
-                    user.getName(), product.getName()));
+            if (logger.isDebugEnabled()) {
+                logger.debug(MessageFormat.format("{0} has modified his comment of the product {1}",
+                        user.getName(), product.getName()));
             }
             product.setTotalScore(product.getTotalScore() - comment.getRating() + rating);
             comment.setRating(rating);
@@ -100,10 +114,11 @@ public class ProductService {
             comment.setTimestamp(System.currentTimeMillis());
             productRepository.update(product);
             return rateRepository.update(comment);
+
         } catch (EmptyResultDataAccessException e) {
-            if(logger.isDebugEnabled()) {
-                logger.debug(MessageFormat.format("{0} created a comment of the product {1}", 
-                    user.getName(), product.getName()));
+            if (logger.isDebugEnabled()) {
+                logger.debug(MessageFormat.format("{0} created a comment of the product {1}",
+                        user.getName(), product.getName()));
             }
             Comment comment = new Comment();
             comment.setUser(user);
@@ -117,5 +132,6 @@ public class ProductService {
             return rateRepository.create(comment);
         }
     }
+
 
 }
