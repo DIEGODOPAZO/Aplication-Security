@@ -14,7 +14,15 @@ public class ShoppingCart implements Serializable {
     public List<Product> getProducts() {
         return products;
     }
-    
+
+    public  List<Long> getProductsId(){
+        List<Long> ids = new ArrayList<>();
+        for(Product p : products){
+            ids.add(p.getProductId());
+        }
+
+        return ids;
+    }
     public boolean contains(Long id) {
         return products.stream().anyMatch(product -> (product.getProductId().equals(id)));
     }
