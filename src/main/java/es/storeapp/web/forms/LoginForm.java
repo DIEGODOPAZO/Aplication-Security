@@ -1,20 +1,22 @@
 package es.storeapp.web.forms;
 
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public class LoginForm {
-    
-    @NotNull
-    @Size(min=1)
+
+    @NotBlank(message = "El correo electrónico es obligatorio")
+    @Email(message = "El formato del correo electrónico no es válido")
+    @Size(max = 255, message = "El correo electrónico no puede superar los 255 caracteres")
     private String email;
-    
-    @NotNull
-    @Size(min=1)
+
+    @NotBlank(message = "La contraseña es obligatoria")
+    @Size(min = 8, max = 255, message = "La contraseña debe tener al menos 8 caracteres")
     private String password;
 
     private Boolean rememberMe;
-    
+
     public String getEmail() {
         return email;
     }
@@ -38,7 +40,4 @@ public class LoginForm {
     public void setRememberMe(Boolean rememberMe) {
         this.rememberMe = rememberMe;
     }
-    
-    
-    
 }
