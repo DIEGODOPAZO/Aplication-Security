@@ -114,27 +114,43 @@ server.error.whitelabel.enabled=false
 ```
 
 - Insecure Deserialization (cookie: user-info)
-	Se detectó que la cookie `user-info` se deserializaba de manera insegura, lo que permitía ejecutar payloads remotos y llevar a ejecución de comandos y código arbitrario en el servidor.
+	Se detectó que la aplicación deserializaba XML procedente de una cookie usando `XMLDecoder` sin comprobaciones, lo que permitía la instanciación arbitraria de clases (RCE mediante `<object class="...">`).  
 
-    Se corrigió el vector de _insecure deserialization_ del cookie `user-info` reemplazando el uso de deserializadores que ejecutan código (p. ej. `XMLDecoder`, con carga de clases dinámicas) por un flujo controlado que **decodifica el valor (Base64) y lo parsea como JSON a un POJO** (`ObjectMapper.readValue(...)`).
-    
-    Cambios aplicados (fragmentos representativos):
+    Para mitigarlo se aplicaron cambios defensivos que **validan la clase antes de deserializar** y limitan el proceso solo a la clase segura `es.storeapp.web.cookies.UserInfo`. Además se mejoró la decodificación y el manejo de errores.
+
+    Cambios aplicados (solo fragmentos modificados):  
 
 ```java
+// Decodificación segura (UTF-8) y extracción de la clase con regex
 
-private static UserInfo base64ToUserInfo(String base64) {
+String xml = new String(Base64.getDecoder().decode(cookieValue), StandardCharsets.UTF_8);
 
-    try {
+String className = extractClassNameFromXML(xml);
 
-        byte[] decoded = Base64.getDecoder().decode(base64);
+if (!WHITELISTED_CLASSES.contains(className)) {
 
-        String json = new String(decoded, StandardCharsets.UTF_8);
+    throw new SecurityException("Clase no permitida en deserialización: " + className);
 
-        return objectMapper.readValue(json, UserInfo.class);
+}
 
-    } catch (Exception e) {
+```
 
-        throw new RuntimeException("Error deserializing user info", e);
+```java
+// Deserialización solo si la clase está permitida (try-with-resources)
+
+try (XMLDecoder xmlDecoder = new XMLDecoder(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)))) {
+
+    Object obj = xmlDecoder.readObject();
+
+    if (obj instanceof UserInfo userInfo) {
+
+        User user = userService.findByEmail(userInfo.getEmail());
+
+        if (user != null && user.getPassword().equals(userInfo.getPassword())) {
+
+            session.setAttribute(Constants.USER_SESSION, user);
+
+        }
 
     }
 
@@ -142,23 +158,53 @@ private static UserInfo base64ToUserInfo(String base64) {
 ```
 
 ```java
+// Extracción segura del atributo class en el XML
 
-private void removeInvalidCookie(HttpServletResponse response) {
+private String extractClassNameFromXML(String xml) {
 
-    Cookie invalidCookie = new Cookie(Constants.PERSISTENT_USER_COOKIE, "");
+    Pattern pattern = Pattern.compile("<object\s+class="([^"]+)"");
 
-    invalidCookie.setMaxAge(0);
+    Matcher matcher = pattern.matcher(xml);
 
-    invalidCookie.setPath("/");
+    if (matcher.find()) {
 
-    response.addCookie(invalidCookie);
+        return matcher.group(1);
+
+    }
+
+    return null;
+
+}
+```
+  
+   El resultado es que el endpoint deja de aceptar deserializaciones arbitrarias desde la cookie; solo se procesan objetos del tipo `UserInfo` tras validación explícita, mitigando la amenaza de ejecución remota de código.
+
+- Access control (puedes comentar sin haber comprado el producto)
+	Se ha detectado que el sistema permitía que cualquier usuario autenticado **comentara productos sin haberlos comprado previamente**.  
+
+   Esto posibilita la inserción de valoraciones fraudulentas y manipulación de la reputación de productos (reviews falsas), constituyendo una vulnerabilidad de **Broken Access Control**.
+
+   Se ha solucionado añadiendo una comprobación server‑side que valida que el usuario haya comprado el producto antes de permitir crear o modificar un comentario.  
+
+   En concreto, se ha utilizado el método `findIfUserBuyProduct(userId, productId)` (en `OrderLineRepository`) desde `ProductService.comment(...)` y se rechaza la operación si no existe compra previa:
+
+```java
+// Comprobación de que el usuario compró el producto
+
+boolean purchased = orderLineRepository.findIfUserBuyProduct(user.getUserId(), productId);
+
+if (!purchased) {
+
+    throw exceptionGenerationUtils.toInvalidStateException(
+
+        "User is not allowed to comment a product not purchased"
+
+    );
 
 }
 ```
 
-   Efecto: la cookie maliciosa deja de ejecutar código y, en caso de fallo al parsear, se elimina del navegador del cliente (por si se implementa un error de cualquier tipo).
-
-- Access control (puedes comentar sin haber comprado el producto)
+   De este modo, el servidor impide que usuarios no compradores creen o modifiquen reseñas, preservando la integridad del sistema de valoraciones y cerrando el vector de ataque.
 
 - Validacion de datos en la capa modelo (usuario)
 		Se detectó que la entidad `User` no aplicaba validaciones suficientes sobre los datos introducidos por el usuario, lo que permitía almacenar valores malformados o potencialmente maliciosos (inyecciones, XSS o datos excesivos).  
@@ -338,6 +384,68 @@ String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
 - Open Redirect en el flujo de autenticación, concretamente en el parámetro next de /login?next=...  
 
 - IDOR (Insecure Direct Object Reference) en el endpoint /orders/{id}.
+		Se detectó que la aplicación permitía acceder, pagar o cancelar pedidos de otros usuarios simplemente modificando el identificador `id` en la URL (`/orders/1`, `/orders/2`, etc.). El servidor obtenía el pedido únicamente mediante `orderService.findById(id)`, sin validar que dicho pedido perteneciera al usuario autenticado.
+
+     Este fallo permitía a cualquier usuario autenticado enumerar pedidos ajenos o incluso modificar su estado (**pagar** o **cancelar** el pedido de otro usuario), representando un grave problema de control de acceso.
+
+     Se ha solucionado sustituyendo el acceso directo al pedido por una consulta que verifica explícitamente la propiedad del recurso. Para ello, se añadió en el repositorio un método que filtra por `orderId` **y** `userId`:
+```java
+
+public Optional<Order> findByIdAndUserId(Long id, Long userId) {
+
+    return entityManager.createQuery(
+
+            "SELECT o FROM Order o WHERE o.orderId = :id AND o.user.userId = :userId",
+
+            Order.class
+
+    )
+
+    .setParameter("id", id)
+
+    .setParameter("userId", userId)
+
+    .getResultList()
+
+    .stream()
+
+    .findFirst();
+
+}
+
+```
+
+   Después, en el servicio se creó un método que solo devuelve el pedido si pertenece al usuario autenticado:
+
+```java
+
+@Transactional(readOnly = true)
+
+public Order findByIdForUser(Long id, Long userId) throws InstanceNotFoundException {
+
+    return orderRepository.findByIdAndUserId(id, userId)
+
+            .orElseThrow(() -> new InstanceNotFoundException(id, "Order", "Order not found"));
+
+}
+
+```
+
+   Finalmente, en los endpoints del controlador (`/orders/{id}`, `/orders/{id}/payment`, `/orders/{id}/cancel`)
+
+   se reemplazó el acceso inseguro:
+
+```java
+orderService.findById(id);
+```
+   
+   por el acceso seguro:
+   
+```java
+orderService.findByIdForUser(id, user.getUserId());
+```
+
+   Gracias a este cambio, aunque un usuario intente manipular el parámetro `id`, el servidor solo devolverá o modificará pedidos que realmente pertenezcan al usuario autenticado. Los pedidos de otros usuarios **no son accesibles y el sistema responde con un mensaje genérico**, evitando tanto acceso no autorizado como enumeración de recursos.
 
 # Exploits
 
