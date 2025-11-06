@@ -1,5 +1,6 @@
 package es.storeapp.business.entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import es.storeapp.common.Constants;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -14,6 +15,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
 @Entity(name = Constants.USER_ENTITY)
 @Table(name = Constants.USERS_TABLE)
@@ -31,41 +36,55 @@ public class User implements Serializable {
         this.address = address;
         this.image = image;
     }
-    
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long userId;
-    
-    @Column(name = "name", nullable = false, unique = false)
+
+    @NotBlank
+    @Size(max = 100)
+    @Pattern(regexp = "[\\p{L}0-9 \\-_'.,]+", message = "Nombre contiene caracteres no permitidos")
+    @Column(name = "name", nullable = false, unique = false, length = 100)
     private String name;
-    
-    @Column(name = "email", nullable = false, unique = true)
+
+    @NotBlank
+    @Email
+    @Size(max = 255)
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
-    
-    @Column(name = "password", nullable = false)
+
+    @NotBlank
+    @Size(min = 8, max = 255) // mínimo 8; límite superior generoso para acomodar hashes largos
+    @JsonIgnore
+    @Column(name = "password", nullable = false, length = 255)
     private String password;
 
-    @Column(name = "address", nullable = false)
+    @NotBlank
+    @Size(max = 500)
+    @Column(name = "address", nullable = false, length = 500)
     private String address;
 
+    @JsonIgnore
     @Column(name = "resetPasswordToken")
     private String resetPasswordToken;
-    
+
     @Embedded
     @AttributeOverrides(value = {
-        @AttributeOverride(name = "card", column = @Column(name = "card")),
-        @AttributeOverride(name = "cvv", column = @Column(name = "CVV")),
-        @AttributeOverride(name = "expirationMonth", column = @Column(name = "expirationMonth")),
-        @AttributeOverride(name = "expirationYear", column = @Column(name = "expirationYear"))
+            @AttributeOverride(name = "card", column = @Column(name = "card")),
+            @AttributeOverride(name = "cvv", column = @Column(name = "CVV")),
+            @AttributeOverride(name = "expirationMonth", column = @Column(name = "expirationMonth")),
+            @AttributeOverride(name = "expirationYear", column = @Column(name = "expirationYear"))
     })
+    @JsonIgnore
     private CreditCard card;
-    
-    @Column(name = "image")
+
+    @Size(max = 255)
+    @Column(name = "image", length = 255)
     private String image;
-    
+
     @OneToMany(mappedBy = "user")
     private List<Comment> comments = new ArrayList<>();
-    
+
     public Long getUserId() {
         return userId;
     }
@@ -90,6 +109,7 @@ public class User implements Serializable {
         this.email = email;
     }
 
+    @JsonIgnore
     public String getPassword() {
         return password;
     }
@@ -130,6 +150,7 @@ public class User implements Serializable {
         this.comments = comments;
     }
 
+    @JsonIgnore
     public String getResetPasswordToken() {
         return resetPasswordToken;
     }
@@ -140,8 +161,8 @@ public class User implements Serializable {
 
     @Override
     public String toString() {
-        return String.format("User{userId=%s, name=%s, email=%s, password=%s, address=%s, resetPasswordToken=%s, card=%s, image=%s}", 
-            userId, name, email, password, address, resetPasswordToken, card, image);
+        return String.format("User{userId=%s, name=%s, email=%s, password=%s, address=%s, resetPasswordToken=%s, card=%s, image=%s}",
+                userId, name, email, password, address, resetPasswordToken, card, image);
     }
 
 }
