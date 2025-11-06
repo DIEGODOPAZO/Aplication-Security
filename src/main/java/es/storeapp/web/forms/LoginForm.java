@@ -2,6 +2,7 @@ package es.storeapp.web.forms;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public class LoginForm {
@@ -13,6 +14,10 @@ public class LoginForm {
 
     @NotBlank(message = "La contraseña es obligatoria")
     @Size(min = 8, max = 255, message = "La contraseña debe tener al menos 8 caracteres")
+    @Pattern(
+            regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-]).+$",
+            message = "La contraseña debe incluir mayúsculas, minúsculas, números y un carácter especial"
+    )
     private String password;
 
     private Boolean rememberMe;
