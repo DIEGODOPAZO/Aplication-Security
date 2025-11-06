@@ -3,6 +3,7 @@ package es.storeapp.web.controller;
 import es.storeapp.business.entities.Comment;
 import es.storeapp.business.entities.User;
 import es.storeapp.business.exceptions.InstanceNotFoundException;
+import es.storeapp.business.exceptions.InvalidStateException;
 import es.storeapp.business.services.ProductService;
 import es.storeapp.common.Constants;
 import es.storeapp.web.exceptions.ErrorHandlingUtils;
@@ -77,6 +78,8 @@ public class CommentController {
                 commentForm.getProductId());
         } catch (InstanceNotFoundException ex) {
            return errorHandlingUtils.handleInstanceNotFoundException(ex, model, locale);
+        } catch (InvalidStateException e) {
+            throw new RuntimeException(e);
         }
     }
     
