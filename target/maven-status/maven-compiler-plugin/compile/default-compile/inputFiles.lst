@@ -4,6 +4,7 @@
 /home/dopa/Escritorio/master/store-app/src/main/java/es/storeapp/business/repositories/UserRepository.java
 /home/dopa/Escritorio/master/store-app/src/main/java/es/storeapp/web/interceptors/AuthenticatedUserInterceptor.java
 /home/dopa/Escritorio/master/store-app/src/main/java/es/storeapp/business/repositories/ProductRepository.java
+/home/dopa/Escritorio/master/store-app/src/main/java/es/storeapp/web/config/SecurityConfig.java
 /home/dopa/Escritorio/master/store-app/src/main/java/es/storeapp/web/session/ShoppingCart.java
 /home/dopa/Escritorio/master/store-app/src/main/java/es/storeapp/web/controller/ProductController.java
 /home/dopa/Escritorio/master/store-app/src/main/java/es/storeapp/web/forms/ChangePasswordForm.java

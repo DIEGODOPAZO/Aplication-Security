@@ -127,8 +127,10 @@ public class OrderController {
         }
         Order order;
         try {
-            order = orderService.create(user, orderForm.getName(), orderForm.getAddress(), orderForm.getPrice(), 
-                    Arrays.asList(products));
+            // orderForm.getPrice() por shoppingCart.getTotalPrice()
+            // Arrays.asList(products) por shoppingCart.getProductsId()
+            order = orderService.create(user, orderForm.getName(), orderForm.getAddress(), shoppingCart.getTotalPrice(),
+                    shoppingCart.getProductsId());
         } catch (InstanceNotFoundException ex) {
             return errorHandlingUtils.handleInstanceNotFoundException(ex, model, locale);
         }
