@@ -116,7 +116,6 @@ public class OrderController {
     @PostMapping(Constants.ORDERS_ENDPOINT)
     public String doCreateOrder(@Valid @ModelAttribute(Constants.ORDER_FORM) OrderForm orderForm,
                                 BindingResult result,
-                                @RequestParam(value = Constants.PRODUCTS_ARRAY) Long[] products,
                                 @SessionAttribute(Constants.USER_SESSION) User user,
                                 @SessionAttribute(Constants.SHOPPING_CART_SESSION) ShoppingCart shoppingCart,
                                 RedirectAttributes redirectAttributes,
