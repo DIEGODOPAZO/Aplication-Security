@@ -1,15 +1,18 @@
 package es.storeapp.web.interceptors;
 
-import com.fasterxml.jackson.core.ObjectCodec;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import es.storeapp.business.entities.User;
 import es.storeapp.business.services.UserService;
 import es.storeapp.common.Constants;
 import es.storeapp.web.cookies.UserInfo;
+
 import java.beans.XMLDecoder;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -19,27 +22,14 @@ import org.springframework.web.servlet.HandlerInterceptor;
 public class AutoLoginInterceptor implements HandlerInterceptor {
 
     private final UserService userService;
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    // Lista blanca de clases permitidas para deserializar
+    private static final Set<String> WHITELISTED_CLASSES = Set.of(
+            "es.storeapp.web.cookies.UserInfo"
+    );
 
     public AutoLoginInterceptor(UserService userService) {
         this.userService = userService;
-    }
-
-    private static UserInfo base64ToUserInfo(String base64) {
-        try {
-            byte[] decoded = Base64.getDecoder().decode(base64);
-            String json = new String(decoded, StandardCharsets.UTF_8);
-            return objectMapper.readValue(json, UserInfo.class);
-        } catch (Exception e) {
-            throw new RuntimeException("Error deserializing user info", e);
-        }
-    }
-
-    private void removeInvalidCookie(HttpServletResponse response) {
-        Cookie invalidCookie = new Cookie(Constants.PERSISTENT_USER_COOKIE, "");
-        invalidCookie.setMaxAge(0);
-        invalidCookie.setPath("/");
-        response.addCookie(invalidCookie);
     }
 
     @Override
@@ -50,30 +40,50 @@ public class AutoLoginInterceptor implements HandlerInterceptor {
         if (session.getAttribute(Constants.USER_SESSION) != null || request.getCookies() == null) {
             return true;
         }
+
         for (Cookie c : request.getCookies()) {
             if (Constants.PERSISTENT_USER_COOKIE.equals(c.getName())) {
                 String cookieValue = c.getValue();
-                if (cookieValue == null) {
-                    continue;
-                }
-                try {
-                    // REEMPLAZA el XMLDecoder inseguro por una funcion segura
-                    UserInfo userInfo = base64ToUserInfo(cookieValue);
+                if (cookieValue == null) continue;
 
-                    User user = userService.findByEmail(userInfo.getEmail());
-                    if (user != null && user.getPassword().equals(userInfo.getPassword())) {
-                        session.setAttribute(Constants.USER_SESSION, user);
-                    } else {
-                        // Opcional: eliminar cookie inválida
-                        removeInvalidCookie(response);
+                try {
+                    // Decodificar la cookie
+                    String xml = new String(Base64.getDecoder().decode(cookieValue), StandardCharsets.UTF_8);
+
+                    // Validar clase antes de deserializar
+                    String className = extractClassNameFromXML(xml);
+                    if (!WHITELISTED_CLASSES.contains(className)) {
+                        throw new SecurityException("Clase no permitida en deserialización: " + className);
                     }
 
-                } catch (Exception e) {
-                    // Eliminar cookie corrupta o maliciosa
-                    removeInvalidCookie(response);
+                    // ✅ Deserialización segura (solo si la clase está en la whitelist)
+                    try (XMLDecoder xmlDecoder = new XMLDecoder(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)))) {
+                        Object obj = xmlDecoder.readObject();
+
+                        if (obj instanceof UserInfo userInfo) {
+                            User user = userService.findByEmail(userInfo.getEmail());
+                            if (user != null && user.getPassword().equals(userInfo.getPassword())) {
+                                session.setAttribute(Constants.USER_SESSION, user);
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    // Registrar el intento de cookie maliciosa
+                    System.err.println("Error al procesar cookie persistente: " + ex.getMessage());
                 }
             }
         }
+
         return true;
+    }
+
+    // Extrae el nombre de la clase del XML de forma segura con regex
+    private String extractClassNameFromXML(String xml) {
+        Pattern pattern = Pattern.compile("<object\\s+class=\"([^\"]+)\"");
+        Matcher matcher = pattern.matcher(xml);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
     }
 }
