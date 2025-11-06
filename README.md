@@ -1,4 +1,4 @@
-###### por Sergio Luaces Martín, Diego Dopazo García y Aarón yada yada
+###### por Sergio Luaces Martín, Diego Dopazo García y Aarón García Filgueira
 
 # Vulnerabilidades encontradas:
 
@@ -28,10 +28,12 @@
 	}	  
 	```  
 	 
+
 - XSS en el login
 		Se ha detectado que en varios casos donde se permite al usuario iniciar sesión, poniendo los tags de script, se puede ejecutar código arbitrario.
 		Aparte de en el caso del login, también ocurre en otros casos donde se le permite al usuario escribir texto.
 		Se ha solucionado...
+
 - SQLi en el login
 		Se ha detectado que el formulario de autenticación concatenaba directamente los valores introducidos por el usuario en la consulta JPQL/SQL, permitiendo modificar la query ejecutada en el servidor mediante técnicas de SQL Injection (por ejemplo, usando `admin' OR '1'='1`).  
 		Esto podría permitir acceder a cuentas sin conocer las credenciales correctas o revelar información sensible de la base de datos.
@@ -51,14 +53,271 @@ query.setParameter("email", email); query.setParameter("password", password);
 - File upload en la foto de perfil
 		Se ha detectado que la funcionalidad de “subir imagen de perfil” aceptaba ficheros que no eran imágenes legítimas, permitiendo la subida de ficheros maliciosos (por ejemplo polyglots o archivos con payloads ocultos) que podrían llevar a la ejecución de scripts u otra actividad no deseada.
 		Se ha solucionado verificando de forma exhaustiva el contenido del fichero subido usando `PngReader` de la librería **pngj**: antes de aceptar el archivo se analiza el cuerpo completo del fichero y se comprueba que cumple la estructura y los chunks válidos de un PNG. Solo se admiten ficheros que pasan esta validación; el resto se rechaza. Con ello se evita que ficheros no-PNG o PNG malformados lleguen al almacenamiento o al procesamiento posterior.
-- Bussines logging en el precio a la hora de pagar
+
+- Bussines logic en el precio a la hora de pagar
+		Se ha detectado que la aplicación obtenía el precio del pedido directamente desde los datos enviados en el formulario (`OrderForm`), lo que permitía a un usuario malintencionado manipular dicho valor antes de enviarlo al servidor (por ejemplo, modificando el precio en el HTML o mediante un proxy HTTP).  
+		Esto suponía una vulnerabilidad grave de **Business Logic**, ya que el servidor confiaba en datos controlados por el cliente para determinar el importe final del pedido.
+		Se ha solucionado modificando la clase `OrderController` para que el precio ya no se obtenga desde el formulario, sino directamente desde el **carrito de la compra** (`ShoppingCart`), cuyos valores son gestionados internamente por el servidor. 
+		De este modo, ni los IDs de productos ni los precios son enviados desde el cliente, eliminando la posibilidad de manipular el total a pagar.
+		El fragmento afectado ahora utiliza el carrito de sesión para recuperar los datos válidos del pedido:
+```java
+
+@PostMapping(Constants.ORDERS_ENDPOINT)
+
+public String doCreateOrder(@Valid @ModelAttribute(Constants.ORDER_FORM) OrderForm orderForm,
+
+                            BindingResult result,
+
+                            @SessionAttribute(Constants.USER_SESSION) User user,
+
+                            @SessionAttribute(Constants.SHOPPING_CART_SESSION) ShoppingCart shoppingCart,
+
+                            RedirectAttributes redirectAttributes,
+
+                            Locale locale, Model model) {
+
+    if (result.hasErrors()) {
+
+        return errorHandlingUtils.handleInvalidFormError(result,
+
+            Constants.CREATE_ORDER_INVALID_PARAMS_MESSAGE, model, locale);
+
+    }
+
+  
+
+    Order order = orderService.createOrderFromCart(user, shoppingCart);
+
+    shoppingCart.clear();
+
+    redirectAttributes.addFlashAttribute("message", "Pedido realizado correctamente");
+
+    return "redirect:/orders";
+
+}
+
+```
+De esta forma, el servidor calcula el precio real del pedido a partir de los datos internos y no de la entrada del usuario, garantizando la integridad del proceso de pago.
+
 - Information disclosure (Los errores que se muestran en la página)
+		Se ha identificado la vulnerabilidad de exposición de información a través de mensajes de error y trazas en las páginas. Tras mitigar los problemas críticos asociados (principalmente SQL Injection y Deserialización insegura), las respuestas del servidor ya no muestran stacktraces ni mensajes técnicos al cliente.
+		Igualmente, para evitar que aparezcan los stacktraces y los whitelabels en un futuro, se han añadido las siguientes líneas al application.properties:
+```properties
+# Evita que Spring incluya stacktraces en las respuestas HTTP
+server.error.include-stacktrace=never
+# Evita incluir el mensaje de excepción en la respuesta
+server.error.include-message=never
+# No incluir errores de binding en la respuesta
+server.error.include-binding-errors=never
+# Desactivar whitelabel error page (usar página propia)
+server.error.whitelabel.enabled=false
+```
+
 - Insecure Deserialization (cookie: user-info)
+	Se detectó que la cookie `user-info` se deserializaba de manera insegura, lo que permitía ejecutar payloads remotos y llevar a ejecución de comandos y código arbitrario en el servidor.
+
+    Se corrigió el vector de _insecure deserialization_ del cookie `user-info` reemplazando el uso de deserializadores que ejecutan código (p. ej. `XMLDecoder`, con carga de clases dinámicas) por un flujo controlado que **decodifica el valor (Base64) y lo parsea como JSON a un POJO** (`ObjectMapper.readValue(...)`).
+    
+    Cambios aplicados (fragmentos representativos):
+
+```java
+
+private static UserInfo base64ToUserInfo(String base64) {
+
+    try {
+
+        byte[] decoded = Base64.getDecoder().decode(base64);
+
+        String json = new String(decoded, StandardCharsets.UTF_8);
+
+        return objectMapper.readValue(json, UserInfo.class);
+
+    } catch (Exception e) {
+
+        throw new RuntimeException("Error deserializing user info", e);
+
+    }
+
+}
+```
+
+```java
+
+private void removeInvalidCookie(HttpServletResponse response) {
+
+    Cookie invalidCookie = new Cookie(Constants.PERSISTENT_USER_COOKIE, "");
+
+    invalidCookie.setMaxAge(0);
+
+    invalidCookie.setPath("/");
+
+    response.addCookie(invalidCookie);
+
+}
+```
+
+   Efecto: la cookie maliciosa deja de ejecutar código y, en caso de fallo al parsear, se elimina del navegador del cliente (por si se implementa un error de cualquier tipo).
+
 - Access control (puedes comentar sin haber comprado el producto)
+
 - Validacion de datos en la capa modelo (usuario)
+		Se detectó que la entidad `User` no aplicaba validaciones suficientes sobre los datos introducidos por el usuario, lo que permitía almacenar valores malformados o potencialmente maliciosos (inyecciones, XSS o datos excesivos).  
+		Se ha solucionado añadiendo validación en la **capa modelo** mediante anotaciones de `jakarta.validation`, limitando formato, longitud y tipo de caracteres, y ocultando campos sensibles en la serialización JSON.  
+		En concreto, se añadieron restricciones como:
+```java
+
+@NotBlank
+
+@Size(max = 100)
+
+@Pattern(regexp = "[\p{L}0-9 \-_'.,]+", message = "Nombre contiene caracteres no permitidos")
+
+private String name;
+
+
+@NotBlank
+
+@Email
+
+@Size(max = 255)
+
+private String email;
+
+
+@NotBlank
+
+@Size(min = 8, max = 255)
+
+@JsonIgnore
+
+private String password;
+
+```
+De este modo, el servidor valida y filtra la entrada antes de persistirla, evitando la inyección de código, el almacenamiento de datos corruptos y la exposición de información sensible.
+
 - Validación de datos en formularios
+
+    Se detectó que varios formularios aceptaban entradas vacías, con formato incorrecto o sin límites, lo que permitía fallos lógicos, abuso por entradas masivas y vectores para XSS/inyección.
+
+    Se ha solucionado aplicando validaciones `jakarta.validation` en los forms (fail‑fast en servidor) y ocultando/exigiendo campos sensibles cuando corresponde.
+
+    Ejemplo (LoginForm):
+```java
+
+@NotBlank(message="El correo es obligatorio")
+
+@Email(message="Formato de correo inválido")
+
+@Size(max=255)
+
+private String email;
+
+  
+
+@NotBlank(message="La contraseña es obligatoria")
+
+@Size(min=8, max=255)
+
+private String password;
+
+```
+
+   Cambios aplicados también en: `ChangePasswordForm`, `ResetPasswordForm`, `UserProfileForm` (passwords, email, name); `CommentForm` (text, rating, productId); `OrderForm` (name, address, price, payNow); `PaymentForm` (creditCard pattern, cvv, expirationMonth/year). 
+   
+   `ProductSearchForm` se dejó opcional (no modificada).
+
+   Resultado: rechazos tempranos de entradas inválidas, reducción de superficie de ataque (XSS/INJECTION/DoS) y coherencia de reglas de validación en todo el flujo.
+
 - Exposición de información sensible
+		Se detectó que varios templates de mensajes (`messages.properties`) incluían valores del usuario mediante placeholders (`{0}`, `{1}`) y esos strings se mostraban en la UI, lo que permitía enumerar usuarios (por ejemplo: “The s.luaces@udc.es 'email' is already in use”). Esto facilita *user enumeration* y divulgación de datos.
+		Se ha solucionado con los siguientes cambios:
+
+    1. **Mensajes genéricos en `messages.properties`**: se eliminaron plantillas que interpolaban el input del cliente y se sustituyeron por frases genéricas sin datos del usuario.  
+
+ **Antes (arriesgado):**
+```properties
+
+       duplicated.instance.exception=The {0} ''{1}'' is already in use
+
+       auth.invalid.user=User {0} does not exist
+
+```
+
+   **Ahora (seguro):**
+
+```properties
+
+       duplicated.instance.exception=Resource already in use
+
+       auth.invalid.user.or.password=User or password is invalid
+ ````
+
+   2. **No pasar valores del usuario a la vista**: en los controladores se dejó de construir mensajes con `messageSource.getMessage(..., new Object[]{userInput}, ...)`. En su lugar se **registran los detalles en logs** y se muestra un mensaje genérico al usuario.
+
+       **Antes (arriesgado):**
+
+       ```java
+
+       String msg = messageSource.getMessage("duplicated.instance.exception", new Object[]{"email", email}, locale);
+
+       model.addAttribute("error", msg);
+
+       ```
+
+       **Ahora (seguro):**
+
+       ```java
+
+       log.info("Registro fallido: email duplicado -> {}", email);
+
+       String msg = messageSource.getMessage("registration.failed", null, locale);
+
+       model.addAttribute("error", msg);
+
+       ```
+
+   3. **UX seguro para registro/recuperación**: respuestas tipo “If the email exists, you will receive instructions” para no confirmar la existencia de cuentas. Añadir rate‑limit / CAPTCHA en endpoints sensibles.  
+
+  
+   Resultado: se evita la confirmación directa de existencia de emails/usuarios y la exposición de datos en mensajes, reduciendo la superficie de *information disclosure* y de user enumeration.
+
+
 - Vulnerabilidad en la autenticacion: contraseña muy simple (no mandado)
+		Se detectó que el sistema permitía establecer contraseñas débiles durante el registro y el inicio de sesión, ya que solo se validaba la longitud mínima mediante `@Size(min = 8)`. Esto permitía el uso de contraseñas como `12345678` o `password`, facilitando ataques de fuerza bruta y comprometiendo la seguridad de las cuentas.
+
+    Se añadió una política de contraseñas fuertes mediante validación en backend (`jakarta.validation`) usando una expresión regular que exige:
+
+    - Una letra mayúscula
+
+    - Una letra minúscula
+
+    - Un número
+
+    - Un carácter especial
+
+```java
+
+@Size(min = 8, max = 255, message = "La contraseña debe tener al menos 8 caracteres")
+
+@Pattern(
+
+    regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-]).+$",
+
+    message = "La contraseña debe incluir mayúsculas, minúsculas, números y un carácter especial"
+
+)
+
+private String password;
+
+```
+   Esta validación se aplicó en:
+
+   - `LoginForm`
+   - `UserProfileForm`
+   - Entidad `User` en la capa modelo
+   
+Con esta mejora, las contraseñas débiles quedan automáticamente rechazadas antes de proceder con la autenticación o el registro, reforzando la seguridad del sistema.
+
 - Vulnerabilidad en la autenticacion: hash con salt estático 
 	 Se ha detectado que en src/main/java/es/storeapp/business/services/UserService.java, existe una variable SALT definida estáticamente 
 	```java
@@ -75,7 +334,9 @@ String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
 
         User user = userRepository.create(new User(name, email, hashedPassword, address, image));
 ````
+
 - Open Redirect en el flujo de autenticación, concretamente en el parámetro next de /login?next=...  
+
 - IDOR (Insecure Direct Object Reference) en el endpoint /orders/{id}.
 
 # Exploits
