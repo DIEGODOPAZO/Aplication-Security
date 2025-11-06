@@ -60,12 +60,12 @@ public class OrderController {
     }
 
     @GetMapping(Constants.ORDER_ENDPOINT)
-    public String doGetOrderPage(@SessionAttribute(Constants.USER_SESSION) User user, 
+    public String doGetOrderPage(@SessionAttribute(Constants.USER_SESSION) User user,
                                  @PathVariable() Long id,
-                                 Model model, 
+                                 Model model,
                                  Locale locale) {
         try {
-            model.addAttribute(Constants.ORDER, orderService.findById(id));
+            model.addAttribute(Constants.ORDER, orderService.findByIdForUser(id, user.getUserId()));
         } catch (InstanceNotFoundException ex) {
             return errorHandlingUtils.handleInstanceNotFoundException(ex, model, locale);
         }
@@ -116,6 +116,7 @@ public class OrderController {
     @PostMapping(Constants.ORDERS_ENDPOINT)
     public String doCreateOrder(@Valid @ModelAttribute(Constants.ORDER_FORM) OrderForm orderForm,
                                 BindingResult result,
+                                @RequestParam(value = Constants.PRODUCTS_ARRAY) Long[] products,
                                 @SessionAttribute(Constants.USER_SESSION) User user,
                                 @SessionAttribute(Constants.SHOPPING_CART_SESSION) ShoppingCart shoppingCart,
                                 RedirectAttributes redirectAttributes,
@@ -126,10 +127,8 @@ public class OrderController {
         }
         Order order;
         try {
-            // orderForm.getPrice() por shoppingCart.getTotalPrice()
-            // Arrays.asList(products) por shoppingCart.getProductsId()
-            order = orderService.create(user, orderForm.getName(), orderForm.getAddress(), shoppingCart.getTotalPrice(),
-                    shoppingCart.getProductsId());
+            order = orderService.create(user, orderForm.getName(), orderForm.getAddress(), orderForm.getPrice(), 
+                    Arrays.asList(products));
         } catch (InstanceNotFoundException ex) {
             return errorHandlingUtils.handleInstanceNotFoundException(ex, model, locale);
         }
