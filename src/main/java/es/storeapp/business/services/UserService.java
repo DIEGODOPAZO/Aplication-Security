@@ -26,7 +26,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ar.com.hjg.pngj.ImageInfo;
 import ar.com.hjg.pngj.PngReader;
 
 @Service
@@ -225,11 +224,8 @@ public class UserService {
         PngReader png = null;
         try {
             png = new PngReader(inputStream); // usar InputStream en lugar de File
-            ImageInfo info = png.imgInfo;
-            System.out.println("Ancho: " + info.cols + ", Alto: " + info.rows + ", Bit depth: " + info.bitDepth);
             return true;
         } catch (RuntimeException e) {
-            System.out.println("No es un PNG válido: " + e.getMessage());
             return false;
         } finally {
             if (png != null) png.end();
