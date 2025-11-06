@@ -54,7 +54,11 @@ public class User implements Serializable {
     private String email;
 
     @NotBlank
-    @Size(min = 8, max = 255) // mínimo 8; límite superior generoso para acomodar hashes largos
+    @Size(min = 8, max = 255, message = "La contraseña debe tener al menos 8 caracteres")
+    @Pattern(
+            regexp = "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-]).+$",
+            message = "La contraseña debe incluir mayúsculas, minúsculas, números y un carácter especial"
+    )
     @JsonIgnore
     @Column(name = "password", nullable = false, length = 255)
     private String password;
