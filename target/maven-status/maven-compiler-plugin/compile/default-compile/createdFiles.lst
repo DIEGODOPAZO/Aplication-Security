@@ -8,6 +8,7 @@ es/storeapp/web/forms/PaymentForm.class
 es/storeapp/business/entities/Order.class
 es/storeapp/Application.class
 es/storeapp/business/entities/User.class
+es/storeapp/web/config/SecurityConfig.class
 es/storeapp/business/entities/OrderLine.class
 es/storeapp/business/repositories/CategoryRepository.class
 es/storeapp/web/forms/UserProfileForm.class

@@ -1,0 +1,28 @@
+En el login no se tuvo que hacer nada devido a que la pantalla ya no enseñaba en el html ningun valor puesto por el usuario debido a los cambios en el mensage de error llevados a cabo para corregir otras vulnerabilidades.
+En el caso de los comentarios se edito la siguiente funcion de la clase CommentController para sanitizar el input de los usuarios:
+  @PostMapping(Constants.COMMENT_PRODUCT_ENDPOINT)
+    public String doCreateComment(@SessionAttribute(Constants.USER_SESSION) User user,
+                                  @Valid @ModelAttribute(Constants.COMMENT_FORM) CommentForm commentForm,
+                                  HttpSession session, 
+                                  RedirectAttributes redirectAttributes,
+                                  Locale locale, 
+                                  Model model) {
+        try {
+            // Sanitizar antes de guardar
+            PolicyFactory policy = Sanitizers.FORMATTING.and(Sanitizers.LINKS);
+            String safeText = policy.sanitize(commentForm.getText());
+
+            productService.comment(user, commentForm.getProductId(), safeText, commentForm.getRating());
+            String message = messageSource.getMessage(Constants.PRODUCT_COMMENT_CREATED, new Object[0], locale);
+            redirectAttributes.addFlashAttribute(Constants.SUCCESS_MESSAGE, message);
+            return Constants.SEND_REDIRECT + MessageFormat.format(Constants.PRODUCT_TEMPLATE,
+                commentForm.getProductId());
+        } catch (InstanceNotFoundException ex) {
+           return errorHandlingUtils.handleInstanceNotFoundException(ex, model, locale);
+        } catch (InvalidStateException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+}
+

@@ -20,7 +20,7 @@
                   <div class="card-body">
                      <div class="row">
                         <div class="col-12 form-title">
-                           <h2 th:utext="#{comment.title} + ': ' + ${product.name} + ' (' + ${product.category.name} + ')'"></h2>
+                           <h2 th:text="#{comment.title} + ': ' + ${product.name} + ' (' + ${product.category.name} + ')'"></h2>
                         </div>
                      </div>
 
@@ -30,13 +30,13 @@
                         <input type="hidden" th:field="*{productId}"/>
                         <div class="form-group row">
                            <label for="name" class="col-3 text-right input-label-middle-rating" 
-                                  th:utext="#{comment.rate}"/>
+                                  th:text="#{comment.rate}"/>
                            <div class="input-group col-9 text-center">
                               <input type="text" class="rating-loading" th:field="*{rating}"/>
                            </div>
                         </div>
                         <div class="form-group row">
-                           <label for="address" class="col-3 text-right" th:utext="#{comment.text}"></label>
+                           <label for="address" class="col-3 text-right" th:text="#{comment.text}"></label>
                            <div class="input-group col-9 col-sm-7">
                               <textarea th:field="*{text}" class="form-control" id="text" name="text" rows="3"
                                         th:errorclass="error"
@@ -53,7 +53,7 @@
                         <div class="form-group row">
                            <div class="col-3"></div>
                            <div class="input-group col-9">
-                              <button type="submit" class="btn btn-primary" th:utext="#{comment.button}"></button>
+                              <button type="submit" class="btn btn-primary" th:text="#{comment.button}"></button>
                            </div>
                         </div>
                      </form>

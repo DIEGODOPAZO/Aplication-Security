@@ -24,6 +24,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.SessionAttribute;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.owasp.html.PolicyFactory;
+import org.owasp.html.Sanitizers;
+
 
 @Controller
 public class CommentController {
@@ -71,7 +74,11 @@ public class CommentController {
                                   Locale locale, 
                                   Model model) {
         try {
-            productService.comment(user, commentForm.getProductId(), commentForm.getText(), commentForm.getRating());
+            // Sanitizar antes de guardar
+            PolicyFactory policy = Sanitizers.FORMATTING.and(Sanitizers.LINKS);
+            String safeText = policy.sanitize(commentForm.getText());
+
+            productService.comment(user, commentForm.getProductId(), safeText, commentForm.getRating());
             String message = messageSource.getMessage(Constants.PRODUCT_COMMENT_CREATED, new Object[0], locale);
             redirectAttributes.addFlashAttribute(Constants.SUCCESS_MESSAGE, message);
             return Constants.SEND_REDIRECT + MessageFormat.format(Constants.PRODUCT_TEMPLATE,
