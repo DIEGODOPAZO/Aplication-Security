@@ -14,12 +14,14 @@ public class OrderForm {
     @Min(value = 0, message = "El precio no puede ser negativo")
     private int price;
 
-    @NotBlank(message = "La dirección es obligatoria")
     @Size(max = 500, message = "La dirección no puede superar los 500 caracteres")
     private String address;
 
     @NotNull
     private Boolean payNow;
+
+    @NotNull
+    private Boolean defaultAddress;
     
     public String getName() {
         return name;
@@ -52,5 +54,6 @@ public class OrderForm {
     public void setPayNow(Boolean payNow) {
         this.payNow = payNow;
     }
-        
+    public void setDefaultAddress(Boolean defaultAddress){this.defaultAddress = defaultAddress;}
+    public Boolean getDefaultAddress(){return this.defaultAddress;}
 }
