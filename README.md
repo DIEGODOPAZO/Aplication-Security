@@ -30,9 +30,59 @@
 	 
 
 - XSS en el login
-		Se ha detectado que en varios casos donde se permite al usuario iniciar sesión, poniendo los tags de script, se puede ejecutar código arbitrario.
-		Aparte de en el caso del login, también ocurre en otros casos donde se le permite al usuario escribir texto.
-		Se ha solucionado...
+		Se ha detectado que en algunas partes de la aplicación (principalmente en los comentarios de productos) el usuario podía introducir texto que luego era renderizado sin sanitización, permitiendo ejecutar código JavaScript mediante **XSS persistente**.
+		En el formulario de *login* no fue necesario realizar cambios adicionales, ya que la pantalla ya no mostraba valores introducidos por el usuario debido a modificaciones previas en los mensajes de error (realizadas al corregir otras vulnerabilidades).
+		En el caso de los comentarios de productos, se modificó el método encargado de crear los comentarios (`doCreateComment`) dentro de `CommentController`, aplicando sanitización del texto usando **OWASP Java HTML Sanitizer**. Así, el texto introducido por el usuario es limpiado antes de guardarlo.
+```java
+
+@PostMapping(Constants.COMMENT_PRODUCT_ENDPOINT)
+
+public String doCreateComment(@SessionAttribute(Constants.USER_SESSION) User user,
+
+                              @Valid @ModelAttribute(Constants.COMMENT_FORM) CommentForm commentForm,
+
+                              HttpSession session,
+
+                              RedirectAttributes redirectAttributes,
+
+                              Locale locale,
+
+                              Model model) {
+
+    try {
+
+        // Sanitizar antes de guardar
+
+        PolicyFactory policy = Sanitizers.FORMATTING.and(Sanitizers.LINKS);
+
+        String safeText = policy.sanitize(commentForm.getText());
+
+  
+
+        productService.comment(user, commentForm.getProductId(), safeText, commentForm.getRating());
+
+        String message = messageSource.getMessage(Constants.PRODUCT_COMMENT_CREATED, new Object[0], locale);
+
+        redirectAttributes.addFlashAttribute(Constants.SUCCESS_MESSAGE, message);
+
+        return Constants.SEND_REDIRECT + MessageFormat.format(Constants.PRODUCT_TEMPLATE,
+
+            commentForm.getProductId());
+
+    } catch (InstanceNotFoundException ex) {
+
+        return errorHandlingUtils.handleInstanceNotFoundException(ex, model, locale);
+
+    } catch (InvalidStateException e) {
+
+        throw new RuntimeException(e);
+
+    }
+
+}
+
+```
+De esta forma, aunque un atacante intente insertar HTML o JavaScript, el servidor lo sanitiza antes de almacenarlo, **evitando ataques XSS persistentes** y protegiendo al resto de usuarios.
 
 - SQLi en el login
 		Se ha detectado que el formulario de autenticación concatenaba directamente los valores introducidos por el usuario en la consulta JPQL/SQL, permitiendo modificar la query ejecutada en el servidor mediante técnicas de SQL Injection (por ejemplo, usando `admin' OR '1'='1`).  
