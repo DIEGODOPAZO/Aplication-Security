@@ -1,5 +1,12 @@
 ###### por Sergio Luaces Martín, Diego Dopazo García y Aarón García Filgueira
 
+> 📌 **Sobre este README**  
+> Documento **resumen** con principales vulnerabilidades, mitigaciones y fragmentos de código.  
+> Alcance: código, configuración y BDD embebida del proyecto original (sin pasarela de pago ni anti-bruteforce).  
+> Detalles completos, evidencias y pruebas: **Memoria** → [PDF](./Memoria_Auditoria.pdf).  
+> **En caso de conflicto, prevalece la Memoria.**
+
+
 # Vulnerabilidades encontradas:
 
 - CPS
@@ -431,7 +438,28 @@ String hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
         User user = userRepository.create(new User(name, email, hashedPassword, address, image));
 ````
 
-- Open Redirect en el flujo de autenticación, concretamente en el parámetro next de /login?next=...  
+- Open Redirect 
+Se detectó que el parámetro `next` del endpoint `/login?next=...` podía ser manipulado para redirigir a dominios externos tras el inicio de sesión, permitiendo ataques de phishing.
+
+Se añadió una validación de seguridad que acepta únicamente rutas internas relativas (que empiecen por /), bloqueando redirecciones hacia URLs externas.
+
+```java
+
+// ... dentro de doLogin(...)
+
+// Redirección segura (solo rutas internas)
+if (next != null) {
+    try {
+        String n = next.trim();
+        URI uri = URI.create(n);
+        if (!uri.isAbsolute() && uri.getHost() == null && n.startsWith("/")) {
+            return Constants.SEND_REDIRECT + n; // ruta interna válida
+        }
+    } catch (IllegalArgumentException ignored) {}
+}
+return Constants.SEND_REDIRECT + Constants.ROOT_ENDPOINT;
+
+```
 
 - IDOR (Insecure Direct Object Reference) en el endpoint /orders/{id}.
 		Se detectó que la aplicación permitía acceder, pagar o cancelar pedidos de otros usuarios simplemente modificando el identificador `id` en la URL (`/orders/1`, `/orders/2`, etc.). El servidor obtenía el pedido únicamente mediante `orderService.findById(id)`, sin validar que dicho pedido perteneciera al usuario autenticado.
@@ -600,3 +628,26 @@ Para finalizar, en las siguientes imágenes se puede ver que el exploit funcion�
 ![perfil](./img/victim_profile.png)
 
 ![exploit_2_prueba](./img/prueba_exploit_dos.png)
+
+### Descarga de aplicación maliciosa mediante open redirect e ingeniería social
+
+**Vulnerabilidades explotadas:**  
+- Open Redirect (`/login?next=...`)
+- Ingeniería social avanzada
+
+**Exploit:**  
+Se simula una campaña de phishing en la que el atacante, tras una filtración de datos, envía un correo que suplanta perfectamente la marca Amazoncillo. Este correo anuncia la “nueva aplicación de escritorio personalizada” y contiene un enlace que, aparentemente, lleva a la web oficial.
+
+El usuario accede a la página legítima, introduce sus credenciales y, sin darse cuenta, es redirigido automáticamente a una falsa web de descarga (aprovechando el parámetro `next`). Aquí se ofrece un instalador malicioso con identidad visual corporativa. La técnica de open redirect se utiliza precisamente para evitar sospechas y facilitar el éxito del ataque:
+- El login real refuerza la seguridad percibida y dificulta la detección.
+- La página maliciosa replica el diseño y la marca original.
+
+![CorreoPhishing](./img/CorreoPhishing.png)
+![RedireccionMaliciosa](./img/InsecureRedirect.png)
+![RedireccionMaliciosa](./img/DescargaMaliciosa.png)
+
+
+> La ingeniería social es crítica en ataques actuales: los atacantes suelen emplear cadenas de confianza con interacciones reales para maximizar el éxito del fraude y escapar a mecanismos tradicionales de detección.
+
+**Impacto:**  
+El usuario descarga y ejecuta el archivo convencido de que permanece en el entorno seguro de Amazoncillo, exponiendo sus datos y sistema.
